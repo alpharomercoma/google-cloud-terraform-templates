@@ -1,0 +1,58 @@
+# =============================================================================
+# Required Configuration
+# =============================================================================
+
+project_id = "my-gcp-project-id"
+
+# =============================================================================
+# Region & Zone
+# =============================================================================
+# Default: Singapore (asia-southeast1) - equivalent to AWS ap-southeast-1
+
+region = "asia-southeast1"
+zone   = "asia-southeast1-b"
+
+# =============================================================================
+# Instance Configuration
+# =============================================================================
+
+instance_name    = "autoshutdown-vm"
+machine_type     = "e2-small"        # 2 vCPU, 2 GB RAM (similar to AWS t4g.small)
+boot_disk_size_gb = 30
+boot_disk_type   = "pd-balanced"
+image_family     = "ubuntu-2404-lts-amd64"
+image_project    = "ubuntu-os-cloud"
+
+# =============================================================================
+# Network Configuration
+# =============================================================================
+
+create_vpc     = true
+network_name   = "autoshutdown-vpc"
+subnet_name    = "autoshutdown-subnet"
+subnet_cidr    = "10.0.1.0/24"
+allow_ssh_cidrs = ["0.0.0.0/0"]     # Restrict to your IP in production
+
+# =============================================================================
+# Autoshutdown Configuration
+# =============================================================================
+
+# Primary: Cloud Monitoring (CPU-based)
+cpu_threshold                = 0.05   # 5% CPU utilization
+cpu_idle_duration_seconds    = 900    # 15 minutes (3 x 5-min periods)
+cpu_alignment_period_seconds = 300    # 5-minute alignment
+
+# Secondary: SSH session detection (startup script)
+ssh_idle_check_interval_minutes = 5   # Check every 5 minutes
+ssh_idle_threshold_checks       = 2   # 2 consecutive idle checks = 10 minutes
+ssh_boot_grace_period_minutes   = 10  # Wait 10 minutes after boot
+
+# =============================================================================
+# Labels
+# =============================================================================
+
+labels = {
+  environment = "dev"
+  managed_by  = "terraform"
+  purpose     = "autoshutdown-vm"
+}
