@@ -152,12 +152,15 @@ terraform apply
 
 ## Cost Estimation
 
-| Resource | Pricing Model | Estimated Cost* |
-|----------|---------------|-----------------|
-| TPU v3-8 (Spot) | Per hour, ~60-91% off on-demand | ~$1.50-2.50/hour |
-| Balanced PD (50GB) | Per month | ~$5/month |
+Pricing based on the default zone **europe-west4-a (Netherlands)**.
 
-*Costs vary by region and may change. Use [Google Cloud Pricing Calculator](https://cloud.google.com/products/calculator) for accurate estimates.
+| Resource | Pricing Model | Estimated Cost* |
+|----------|---------------|--------------------|
+| TPU v3-8 (On-demand) | 4 chips × $2.20/chip-hr | $8.80/hour |
+| TPU v3-8 (Spot) | 60-91% off on-demand | ~$0.88-3.52/hour |
+| Balanced PD (50GB) | $0.12/GB/mo | ~$6.00/month |
+
+*Spot prices are dynamic and change based on supply/demand. Use the [Google Cloud Pricing Calculator](https://cloud.google.com/products/calculator) for current estimates.
 
 ## Security Best Practices Implemented
 

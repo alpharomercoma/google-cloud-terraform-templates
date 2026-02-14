@@ -250,17 +250,19 @@ gcloud compute instances start <instance-name> --zone=<zone> --project=<project-
 
 ## Cost Estimate
 
+Pricing based on the default region **asia-southeast1 (Singapore)**.
+
 | Resource | Approximate Monthly Cost |
 |---|---|
-| e2-small instance (730 hrs) | ~$12.23 |
-| 30 GB pd-balanced disk | ~$3.00 |
+| e2-small instance (730 hrs × $0.0207/hr) | ~$15.11 |
+| 30 GB pd-balanced disk ($0.11/GB/mo) | ~$3.30 |
 | Cloud Function (idle alert only) | ~$0.00 (free tier) |
 | Cloud Monitoring | ~$0.00 (included) |
 | Pub/Sub | ~$0.00 (free tier) |
 | VPC + Firewall | ~$0.00 (no charge) |
-| **Total (running 24/7)** | **~$15.23/mo** |
+| **Total (running 24/7)** | **~$18.41/mo** |
 
-With auto-shutdown, actual costs will be significantly lower based on usage.
+With auto-shutdown, actual costs will be significantly lower based on usage. Prices vary by region — use the [Google Cloud Pricing Calculator](https://cloud.google.com/products/calculator) for other regions.
 
 ## Cleanup
 
