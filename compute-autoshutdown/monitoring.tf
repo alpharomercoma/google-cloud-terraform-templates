@@ -6,8 +6,6 @@
 #   Cloud Monitoring Alert Policy (CPU < 5% for 15 min)
 #     → Pub/Sub Topic (notification channel)
 #       → Cloud Function (2nd gen, stops the instance)
-#
-# GCP equivalent of AWS CloudWatch Alarm → EC2 Stop Action
 # =============================================================================
 
 # =============================================================================

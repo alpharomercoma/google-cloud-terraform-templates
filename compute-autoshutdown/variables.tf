@@ -30,9 +30,9 @@ variable "instance_name" {
 }
 
 variable "machine_type" {
-  description = "Machine type for the instance (e.g., e2-small, e2-medium, n2-standard-2)"
+  description = "Machine type for the instance (e.g., e2-medium, e2-standard-2, n2-standard-2)"
   type        = string
-  default     = "e2-small"
+  default     = "e2-medium"
 }
 
 variable "boot_disk_size_gb" {
