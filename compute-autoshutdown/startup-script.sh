@@ -2,20 +2,21 @@
 set -e
 
 # =============================================================================
-# SSH Inactivity Auto-Shutdown Script
+# Multi-Signal Inactivity Auto-Shutdown Script
 # =============================================================================
-# This startup script implements SSH session-based inactivity detection.
-# It checks for active SSH sessions every ${check_interval_min} minutes and shuts down
-# the instance after ${idle_threshold} consecutive checks (${idle_timeout_minutes} minutes) with no activity.
-#
-# This is the secondary auto-shutdown mechanism. The primary mechanism is
-# Cloud Monitoring alerting on low CPU utilization.
+# This startup script implements inactivity detection using multiple independent
+# signals and a quorum decision model to reduce false positives.
 # =============================================================================
 
 # Configuration (injected by Terraform templatefile)
 IDLE_THRESHOLD=${idle_threshold}
 CHECK_INTERVAL_MIN=${check_interval_min}
 BOOT_GRACE_PERIOD=${boot_grace_period}
+CPU_IDLE_THRESHOLD=5
+NET_KBPS_THRESHOLD=20
+DISK_IOPS_THRESHOLD=2
+DISK_KBPS_THRESHOLD=10
+WORKLOAD_IDLE_SIGNALS_REQUIRED=2
 LOG_FILE="/var/log/autoshutdown.log"
 STATE_FILE="/var/run/autoshutdown-idle-count"
 
@@ -24,6 +25,11 @@ cat > /usr/local/bin/check-ssh-idle.sh << 'SCRIPT'
 #!/bin/bash
 
 IDLE_THRESHOLD=${idle_threshold}
+CPU_IDLE_THRESHOLD=5
+NET_KBPS_THRESHOLD=20
+DISK_IOPS_THRESHOLD=2
+DISK_KBPS_THRESHOLD=10
+WORKLOAD_IDLE_SIGNALS_REQUIRED=2
 LOG_FILE="/var/log/autoshutdown.log"
 STATE_FILE="/var/run/autoshutdown-idle-count"
 LOCK_FILE="/var/run/autoshutdown.lock"
@@ -41,7 +47,7 @@ fi
 IDLE_COUNT=$(cat "$STATE_FILE" 2>/dev/null || echo "0")
 
 # =========================================================================
-# Activity Detection - Multiple Methods for Robustness
+# Multi-Signal Activity Detection
 # =========================================================================
 
 # 1. Check for active SSH sessions via who (pts terminals)
@@ -58,11 +64,11 @@ fi
 SCREEN_SESSIONS=$(pgrep -c "screen\|tmux" 2>/dev/null || echo "0")
 
 # 4. Check CPU usage using /proc/stat
-read -r cpu user nice system idle iowait irq softirq steal _ < /proc/stat
+read -r _ user nice system idle iowait irq softirq steal _ < /proc/stat
 PREV_IDLE=$idle
 PREV_TOTAL=$((user + nice + system + idle + iowait + irq + softirq + steal))
 sleep 1
-read -r cpu user nice system idle iowait irq softirq steal _ < /proc/stat
+read -r _ user nice system idle iowait irq softirq steal _ < /proc/stat
 CURR_IDLE=$idle
 CURR_TOTAL=$((user + nice + system + idle + iowait + irq + softirq + steal))
 DIFF_IDLE=$((CURR_IDLE - PREV_IDLE))
@@ -73,11 +79,60 @@ else
     CPU_BUSY=0
 fi
 
-# 5. Check for high memory usage (training jobs use lots of memory)
-MEM_USED_PCT=$(free | awk '/^Mem:/ {printf "%.0f", $3/$2 * 100}')
+# 5. Check network throughput (combined inbound + outbound)
+NET_IFACE=$(ip -o -4 route show to default | awk '{print $5}' | head -1)
+if [ -z "$NET_IFACE" ]; then
+    NET_IFACE=$(ls /sys/class/net 2>/dev/null | grep -E -v '^(lo|docker|br-|veth)' | head -1)
+fi
+
+NET_KBPS=0
+if [ -n "$NET_IFACE" ] && [ -r "/sys/class/net/$NET_IFACE/statistics/rx_bytes" ] && [ -r "/sys/class/net/$NET_IFACE/statistics/tx_bytes" ]; then
+    RX1=$(cat "/sys/class/net/$NET_IFACE/statistics/rx_bytes")
+    TX1=$(cat "/sys/class/net/$NET_IFACE/statistics/tx_bytes")
+    sleep 1
+    RX2=$(cat "/sys/class/net/$NET_IFACE/statistics/rx_bytes")
+    TX2=$(cat "/sys/class/net/$NET_IFACE/statistics/tx_bytes")
+    TOTAL_BYTES=$(( (RX2 - RX1) + (TX2 - TX1) ))
+    NET_KBPS=$(( TOTAL_BYTES / 1024 ))
+fi
+
+# 6. Check disk I/O activity (combined read/write IOPS + throughput)
+read -r DISK_IO1 DISK_SECTORS1 <<< "$(awk '$3 !~ /^(loop|ram|fd|sr|dm-|md)/ {io += $4 + $8; sectors += $6 + $10} END {print io + 0, sectors + 0}' /proc/diskstats)"
+sleep 1
+read -r DISK_IO2 DISK_SECTORS2 <<< "$(awk '$3 !~ /^(loop|ram|fd|sr|dm-|md)/ {io += $4 + $8; sectors += $6 + $10} END {print io + 0, sectors + 0}' /proc/diskstats)"
+DISK_IOPS=$((DISK_IO2 - DISK_IO1))
+DISK_KBPS=$(( ((DISK_SECTORS2 - DISK_SECTORS1) * 512) / 1024 ))
+
+# Determine workload idle quorum (2 of 3 signals: CPU, network, disk)
+WORKLOAD_IDLE_SIGNALS=0
+WORKLOAD_REASON=""
+
+if [ "$CPU_BUSY" -lt "$CPU_IDLE_THRESHOLD" ]; then
+    WORKLOAD_IDLE_SIGNALS=$((WORKLOAD_IDLE_SIGNALS + 1))
+    if [ -n "$WORKLOAD_REASON" ]; then
+        WORKLOAD_REASON="$WORKLOAD_REASON; "
+    fi
+    WORKLOAD_REASON="$WORKLOAD_REASON""cpu=$CPU_BUSY%"
+fi
+
+if [ "$NET_KBPS" -lt "$NET_KBPS_THRESHOLD" ]; then
+    WORKLOAD_IDLE_SIGNALS=$((WORKLOAD_IDLE_SIGNALS + 1))
+    if [ -n "$WORKLOAD_REASON" ]; then
+        WORKLOAD_REASON="$WORKLOAD_REASON; "
+    fi
+    WORKLOAD_REASON="$WORKLOAD_REASON""net=$NET_KBPS KB/s"
+fi
+
+if [ "$DISK_IOPS" -lt "$DISK_IOPS_THRESHOLD" ] && [ "$DISK_KBPS" -lt "$DISK_KBPS_THRESHOLD" ]; then
+    WORKLOAD_IDLE_SIGNALS=$((WORKLOAD_IDLE_SIGNALS + 1))
+    if [ -n "$WORKLOAD_REASON" ]; then
+        WORKLOAD_REASON="$WORKLOAD_REASON; "
+    fi
+    WORKLOAD_REASON="$WORKLOAD_REASON""disk=$DISK_IOPS IOPS/$DISK_KBPS KB/s"
+fi
 
 # Log current state
-echo "$(date): SSH=$ACTIVE_SSH, SSHD=$IAP_SESSIONS, Screen=$SCREEN_SESSIONS, CPU=$CPU_BUSY%, Mem=$MEM_USED_PCT%, IdleCount=$IDLE_COUNT" >> "$LOG_FILE"
+echo "$(date): SSH=$ACTIVE_SSH, SSHD=$IAP_SESSIONS, Screen=$SCREEN_SESSIONS, CPU=$CPU_BUSY%, NET=$NET_KBPS KB/s, DISK=$DISK_IOPS IOPS/$DISK_KBPS KB/s, WorkloadIdleSignals=$WORKLOAD_IDLE_SIGNALS/3, IdleCount=$IDLE_COUNT" >> "$LOG_FILE"
 
 # Determine if system is active
 IS_ACTIVE=0
@@ -92,23 +147,20 @@ elif [ "$IAP_SESSIONS" -gt 0 ]; then
 elif [ "$SCREEN_SESSIONS" -gt 0 ]; then
     IS_ACTIVE=1
     REASON="Screen/tmux sessions running"
-elif [ "$CPU_BUSY" -gt 10 ]; then
+elif [ "$WORKLOAD_IDLE_SIGNALS" -lt "$WORKLOAD_IDLE_SIGNALS_REQUIRED" ]; then
     IS_ACTIVE=1
-    REASON="CPU busy ($CPU_BUSY% > 10%)"
-elif [ "$MEM_USED_PCT" -gt 80 ]; then
-    IS_ACTIVE=1
-    REASON="High memory usage ($MEM_USED_PCT% > 80%)"
+    REASON="Idle quorum not met ($WORKLOAD_IDLE_SIGNALS/3 workload signals idle)"
 fi
 
 if [ "$IS_ACTIVE" -eq 0 ]; then
     IDLE_COUNT=$((IDLE_COUNT + 1))
     echo "$IDLE_COUNT" > "$STATE_FILE"
-    echo "$(date): No activity detected. Idle count: $IDLE_COUNT/$IDLE_THRESHOLD" >> "$LOG_FILE"
+    echo "$(date): Idle quorum met (ssh/session idle, workload_idle_signals=$WORKLOAD_IDLE_SIGNALS). Idle count: $IDLE_COUNT/$IDLE_THRESHOLD" >> "$LOG_FILE"
 
     if [ "$IDLE_COUNT" -ge "$IDLE_THRESHOLD" ]; then
         echo "$(date): IDLE THRESHOLD REACHED. Initiating shutdown..." >> "$LOG_FILE"
         sync
-        /sbin/shutdown -h now "Auto-shutdown: No SSH activity detected"
+        /sbin/shutdown -h now "Auto-shutdown: SSH/session idle and workload idle quorum met ($WORKLOAD_REASON)"
     fi
 else
     echo "0" > "$STATE_FILE"
@@ -122,19 +174,19 @@ SCRIPT
 chmod +x /usr/local/bin/check-ssh-idle.sh
 
 # Create systemd service
-cat > /etc/systemd/system/autoshutdown.service << EOF
+cat > /etc/systemd/system/autoshutdown.service << EOF2
 [Unit]
-Description=Check for SSH inactivity and shutdown if idle
+Description=Check for multi-signal inactivity and shutdown if idle
 
 [Service]
 Type=oneshot
 ExecStart=/usr/local/bin/check-ssh-idle.sh
-EOF
+EOF2
 
 # Create systemd timer for periodic checks
-cat > /etc/systemd/system/autoshutdown.timer << EOF
+cat > /etc/systemd/system/autoshutdown.timer << EOF2
 [Unit]
-Description=Run SSH inactivity check every ${check_interval_min} minutes
+Description=Run inactivity check every ${check_interval_min} minutes
 
 [Timer]
 OnBootSec=${boot_grace_period}min
@@ -143,7 +195,7 @@ Unit=autoshutdown.service
 
 [Install]
 WantedBy=timers.target
-EOF
+EOF2
 
 # Enable and start the timer
 systemctl daemon-reload
@@ -155,3 +207,5 @@ echo "$(date): Auto-shutdown monitoring initialized" > /var/log/autoshutdown.log
 echo "$(date): Idle threshold: ${idle_threshold} checks (${idle_timeout_minutes} minutes)" >> /var/log/autoshutdown.log
 echo "$(date): Check interval: ${check_interval_min} minutes" >> /var/log/autoshutdown.log
 echo "$(date): Boot grace period: ${boot_grace_period} minutes" >> /var/log/autoshutdown.log
+echo "$(date): Workload thresholds: CPU<5%, NET<20KB/s, DISK<2IOPS and <10KB/s" >> /var/log/autoshutdown.log
+echo "$(date): Decision rule: SSH/session idle AND at least 2 workload idle signals" >> /var/log/autoshutdown.log

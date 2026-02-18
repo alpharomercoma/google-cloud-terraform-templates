@@ -158,6 +158,28 @@ variable "ssh_boot_grace_period_minutes" {
   default     = 10
 }
 
+variable "network_idle_threshold_bytes_per_second" {
+  description = "Per-direction network throughput threshold in bytes/sec for idle detection (Cloud Monitoring)"
+  type        = number
+  default     = 20480
+
+  validation {
+    condition     = var.network_idle_threshold_bytes_per_second > 0
+    error_message = "Network idle threshold must be greater than 0."
+  }
+}
+
+variable "disk_idle_threshold_bytes_per_second" {
+  description = "Per-direction disk throughput threshold in bytes/sec for idle detection (Cloud Monitoring)"
+  type        = number
+  default     = 10240
+
+  validation {
+    condition     = var.disk_idle_threshold_bytes_per_second > 0
+    error_message = "Disk idle threshold must be greater than 0."
+  }
+}
+
 # =============================================================================
 # Labels
 # =============================================================================

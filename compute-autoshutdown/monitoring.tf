@@ -100,15 +100,16 @@ resource "google_pubsub_topic_iam_member" "monitoring_publisher" {
 
 resource "google_monitoring_alert_policy" "cpu_idle" {
   display_name = "Compute Auto-Shutdown - CPU Idle (${google_compute_instance.vm.name})"
-  combiner     = "OR"
+  combiner     = "AND"
 
   documentation {
     content = <<-EOT
       ## Auto-Shutdown Alert
 
-      Instance **${google_compute_instance.vm.name}** in zone **${var.zone}** has CPU
-      utilization below ${var.cpu_threshold * 100}% for over ${var.cpu_idle_duration_seconds / 60} minutes,
-      indicating it is idle.
+      Instance **${google_compute_instance.vm.name}** in zone **${var.zone}** is considered idle when:
+      - CPU utilization is below ${var.cpu_threshold * 100}% for ${var.cpu_idle_duration_seconds / 60} minutes
+      - Combined network traffic (ingress + egress) is low
+      - Disk read/write throughput is low
 
       The Cloud Function will automatically stop this instance.
 
@@ -129,6 +130,90 @@ resource "google_monitoring_alert_policy" "cpu_idle" {
       aggregations {
         alignment_period   = "${var.cpu_alignment_period_seconds}s"
         per_series_aligner = "ALIGN_MEAN"
+      }
+
+      trigger {
+        count = 1
+      }
+    }
+  }
+
+  conditions {
+    display_name = "Network ingress below ${var.network_idle_threshold_bytes_per_second} B/s"
+
+    condition_threshold {
+      filter = "resource.type = \"gce_instance\" AND metric.type = \"compute.googleapis.com/instance/network/received_bytes_count\" AND resource.labels.instance_id = \"${google_compute_instance.vm.instance_id}\""
+
+      duration        = "${var.cpu_idle_duration_seconds}s"
+      comparison      = "COMPARISON_LT"
+      threshold_value = var.network_idle_threshold_bytes_per_second
+
+      aggregations {
+        alignment_period   = "${var.cpu_alignment_period_seconds}s"
+        per_series_aligner = "ALIGN_RATE"
+      }
+
+      trigger {
+        count = 1
+      }
+    }
+  }
+
+  conditions {
+    display_name = "Network egress below ${var.network_idle_threshold_bytes_per_second} B/s"
+
+    condition_threshold {
+      filter = "resource.type = \"gce_instance\" AND metric.type = \"compute.googleapis.com/instance/network/sent_bytes_count\" AND resource.labels.instance_id = \"${google_compute_instance.vm.instance_id}\""
+
+      duration        = "${var.cpu_idle_duration_seconds}s"
+      comparison      = "COMPARISON_LT"
+      threshold_value = var.network_idle_threshold_bytes_per_second
+
+      aggregations {
+        alignment_period   = "${var.cpu_alignment_period_seconds}s"
+        per_series_aligner = "ALIGN_RATE"
+      }
+
+      trigger {
+        count = 1
+      }
+    }
+  }
+
+  conditions {
+    display_name = "Disk read throughput below ${var.disk_idle_threshold_bytes_per_second} B/s"
+
+    condition_threshold {
+      filter = "resource.type = \"gce_instance\" AND metric.type = \"compute.googleapis.com/instance/disk/read_bytes_count\" AND resource.labels.instance_id = \"${google_compute_instance.vm.instance_id}\""
+
+      duration        = "${var.cpu_idle_duration_seconds}s"
+      comparison      = "COMPARISON_LT"
+      threshold_value = var.disk_idle_threshold_bytes_per_second
+
+      aggregations {
+        alignment_period   = "${var.cpu_alignment_period_seconds}s"
+        per_series_aligner = "ALIGN_RATE"
+      }
+
+      trigger {
+        count = 1
+      }
+    }
+  }
+
+  conditions {
+    display_name = "Disk write throughput below ${var.disk_idle_threshold_bytes_per_second} B/s"
+
+    condition_threshold {
+      filter = "resource.type = \"gce_instance\" AND metric.type = \"compute.googleapis.com/instance/disk/write_bytes_count\" AND resource.labels.instance_id = \"${google_compute_instance.vm.instance_id}\""
+
+      duration        = "${var.cpu_idle_duration_seconds}s"
+      comparison      = "COMPARISON_LT"
+      threshold_value = var.disk_idle_threshold_bytes_per_second
+
+      aggregations {
+        alignment_period   = "${var.cpu_alignment_period_seconds}s"
+        per_series_aligner = "ALIGN_RATE"
       }
 
       trigger {

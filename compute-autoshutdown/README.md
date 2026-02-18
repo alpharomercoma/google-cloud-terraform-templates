@@ -16,19 +16,35 @@ Compute Engine instance with automatic shutdown on inactivity detection.
 
 ### Cloud Monitoring Alert (Primary)
 
-Monitors CPU utilization. When average CPU stays below 5% for 15 minutes, the alert fires → Pub/Sub → Cloud Function stops the instance via Compute API.
+Monitors a multi-signal idle profile. Alert fires only when all conditions remain true for 15 minutes:
+- CPU utilization below 5%
+- Network ingress below 20 KB/s
+- Network egress below 20 KB/s
+- Disk read throughput below 10 KB/s
+- Disk write throughput below 10 KB/s
 
-### SSH Session Detection (Secondary)
+Alert flow: Monitoring policy → Pub/Sub → Cloud Function → `instances.stop()`.
 
-Systemd timer runs every 5 minutes checking for activity: SSH sessions, SSHD processes, screen/tmux, CPU > 10%, memory > 80%. Shuts down after 2 consecutive idle checks (10 minutes). 10-minute boot grace period.
+### In-VM Multi-Signal Detection (Secondary)
+
+Systemd timer runs every 5 minutes checking:
+- Session activity (`who`, `sshd`, `screen`/`tmux`)
+- CPU busy percentage
+- Combined network throughput (RX+TX)
+- Combined disk I/O (IOPS + throughput)
+
+Shutdown quorum requires:
+- session signals idle **and**
+- at least `2 of 3` workload-idle signals (`CPU`, `Network`, `Disk`)
+- for 2 consecutive checks (10 minutes), after a 10-minute boot grace period
 
 ## Architecture
 
 ```
 Compute Engine Instance (e2-medium)
-├── Cloud Monitoring Alert (CPU < 5%, 15 min)
+├── Cloud Monitoring Alert (CPU + Network + Disk idle, 15 min)
 │   └── Pub/Sub → Cloud Function → instances.stop()
-└── Systemd Timer (SSH/activity idle, 10 min) → shutdown -h now
+└── Systemd Timer (session idle + workload quorum, 10 min) → shutdown -h now
 ```
 
 ## Deploy

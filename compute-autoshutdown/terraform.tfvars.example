@@ -41,6 +41,8 @@ allow_ssh_cidrs = ["0.0.0.0/0"]     # Restrict to your IP in production
 cpu_threshold                = 0.05   # 5% CPU utilization
 cpu_idle_duration_seconds    = 900    # 15 minutes (3 x 5-min periods)
 cpu_alignment_period_seconds = 300    # 5-minute alignment
+network_idle_threshold_bytes_per_second = 20480  # 20 KB/s ingress and 20 KB/s egress
+disk_idle_threshold_bytes_per_second    = 10240  # 10 KB/s read and 10 KB/s write
 
 # Secondary: SSH session detection (startup script)
 ssh_idle_check_interval_minutes = 5   # Check every 5 minutes
