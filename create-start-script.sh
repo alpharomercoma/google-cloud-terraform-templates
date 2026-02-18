@@ -46,13 +46,23 @@ set -euo pipefail
 INSTANCE_NAME="${INSTANCE_NAME}"
 ZONE="${ZONE}"
 PROJECT_ID="${PROJECT_ID}"
+SSH_USER="${SSH_USER}"
+SSH_CONFIG="\${HOME}/.ssh/config"
+SSH_HOST_ALIAS="gcp-${INSTANCE_NAME}"
+
+notify() {
+  if command -v notify-send >/dev/null 2>&1; then
+    notify-send "\$1" "\$2" -u low -t 3000
+  fi
+}
 
 echo "Checking instance state..."
 STATE=\$(gcloud compute instances describe "\$INSTANCE_NAME" --zone="\$ZONE" --project="\$PROJECT_ID" \
   --format="value(status)" 2>/dev/null)
 
-if [ "\$STATE" = "TERMINATED" ] || [ "\$STATE" = "STOPPED" ]; then
+if [ "\$STATE" = "TERMINATED" ]; then
   echo "Starting instance \$INSTANCE_NAME..."
+  notify "GCP Dev Box" "Waking up instance..."
   gcloud compute instances start "\$INSTANCE_NAME" --zone="\$ZONE" --project="\$PROJECT_ID"
 elif [ "\$STATE" = "RUNNING" ]; then
   echo "Instance already running."
@@ -60,6 +70,26 @@ else
   echo "Instance is in state: \$STATE"
   exit 1
 fi
+
+IP=\$(gcloud compute instances describe "\$INSTANCE_NAME" --zone="\$ZONE" --project="\$PROJECT_ID" \
+  --format="value(networkInterfaces[0].accessConfigs[0].natIP)")
+echo "Instance is up at: \$IP"
+
+mkdir -p "\$(dirname "\$SSH_CONFIG")"
+touch "\$SSH_CONFIG"
+if grep -q "# GCP_DEV_BOX_START \${SSH_HOST_ALIAS}" "\$SSH_CONFIG"; then
+  sed -i "/# GCP_DEV_BOX_START \${SSH_HOST_ALIAS}/,/# GCP_DEV_BOX_END \${SSH_HOST_ALIAS}/ s/HostName .*/HostName \$IP/" "\$SSH_CONFIG"
+else
+  cat >> "\$SSH_CONFIG" <<EOF
+# GCP_DEV_BOX_START \${SSH_HOST_ALIAS}
+Host \${SSH_HOST_ALIAS}
+  HostName \$IP
+  User \$SSH_USER
+# GCP_DEV_BOX_END \${SSH_HOST_ALIAS}
+EOF
+fi
+echo "SSH config updated for host alias: \$SSH_HOST_ALIAS"
+notify "GCP Dev Box Ready" "Instance is UP at \$IP. SSH config updated."
 
 echo "Connecting via SSH..."
 gcloud compute ssh "\$INSTANCE_NAME" --zone="\$ZONE" --project="\$PROJECT_ID"
