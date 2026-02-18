@@ -48,6 +48,7 @@ terraform apply
 | `tpu_spot` | Use spot pricing | `true` |
 | `disk_size_gb` | Disk size (GB) | `50` |
 | `attach_disk_to_tpu` | Attach disk to TPU | `true` |
+| `enable_external_ips` | Assign public IPs to TPU workers | `false` |
 
 > **Important:** The persistent disk must be in the same zone as the TPU VM.
 
