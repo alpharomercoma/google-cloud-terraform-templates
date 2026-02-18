@@ -86,6 +86,9 @@ gcloud compute instances start <instance-name> --zone=<zone> --project=<project-
 | `instance_name` | Instance name | `autoshutdown-vm` |
 | `machine_type` | Machine type | `e2-medium` |
 | `boot_disk_size_gb` | Boot disk size (GB) | `30` |
+| `allow_ssh_cidrs` | Optional direct SSH CIDRs | `[]` (disabled) |
+
+Direct SSH ingress is disabled by default. Use IAP (`--tunnel-through-iap`) or set `allow_ssh_cidrs` explicitly.
 
 ## Cost Estimate
 

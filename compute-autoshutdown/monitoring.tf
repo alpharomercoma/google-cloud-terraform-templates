@@ -243,11 +243,13 @@ resource "google_service_account" "cloud_function_sa" {
   description  = "Service account for the auto-shutdown Cloud Function"
 }
 
-# Grant the Cloud Function permission to stop Compute Engine instances
-resource "google_project_iam_member" "function_compute_admin" {
-  project = var.project_id
-  role    = "roles/compute.instanceAdmin.v1"
-  member  = "serviceAccount:${google_service_account.cloud_function_sa.email}"
+# Grant the Cloud Function least-privilege control on only the target VM.
+resource "google_compute_instance_iam_member" "function_instance_operator" {
+  project       = var.project_id
+  zone          = var.zone
+  instance_name = google_compute_instance.vm.name
+  role          = "roles/compute.instanceAdmin.v1"
+  member        = "serviceAccount:${google_service_account.cloud_function_sa.email}"
 }
 
 # =============================================================================

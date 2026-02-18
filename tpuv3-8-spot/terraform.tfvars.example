@@ -64,7 +64,7 @@ disk_attachment_mode = "READ_WRITE"
 # -----------------------------------------------------------------------------
 
 # Enable external IPs for TPU workers
-enable_external_ips = true
+enable_external_ips = false
 
 # VPC network (use "default" for the default network)
 network = "default"

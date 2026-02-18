@@ -115,7 +115,7 @@ variable "disk_labels" {
 variable "enable_external_ips" {
   description = "Whether to enable external IPs for TPU workers"
   type        = bool
-  default     = true
+  default     = false
 }
 
 variable "network" {

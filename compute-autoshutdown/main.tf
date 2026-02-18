@@ -60,7 +60,7 @@ resource "google_compute_subnetwork" "subnet" {
 # =============================================================================
 
 resource "google_compute_firewall" "allow_ssh" {
-  count = var.create_vpc ? 1 : 0
+  count = var.create_vpc && length(var.allow_ssh_cidrs) > 0 ? 1 : 0
 
   name    = "allow-ssh-${random_id.suffix.hex}"
   network = google_compute_network.vpc[0].id
@@ -157,7 +157,10 @@ resource "google_compute_instance" "vm" {
 
   service_account {
     email  = google_service_account.instance_sa.email
-    scopes = ["cloud-platform"]
+    scopes = [
+      "https://www.googleapis.com/auth/logging.write",
+      "https://www.googleapis.com/auth/monitoring.write",
+    ]
   }
 
   scheduling {
@@ -190,9 +193,4 @@ resource "google_compute_instance" "vm" {
     google_compute_firewall.allow_iap_ssh,
   ]
 
-  lifecycle {
-    ignore_changes = [
-      metadata["ssh-keys"],
-    ]
-  }
 }

@@ -98,9 +98,9 @@ variable "subnet_cidr" {
 }
 
 variable "allow_ssh_cidrs" {
-  description = "CIDR ranges allowed to SSH into the instance (restrict in production)"
+  description = "Optional CIDR ranges allowed to SSH into the instance. Leave empty to disable direct SSH ingress and use IAP/OS Login."
   type        = list(string)
-  default     = ["0.0.0.0/0"]
+  default     = []
 }
 
 # =============================================================================

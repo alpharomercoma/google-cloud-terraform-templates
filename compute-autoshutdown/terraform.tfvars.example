@@ -31,7 +31,7 @@ create_vpc     = true
 network_name   = "autoshutdown-vpc"
 subnet_name    = "autoshutdown-subnet"
 subnet_cidr    = "10.0.1.0/24"
-allow_ssh_cidrs = ["0.0.0.0/0"]     # Restrict to your IP in production
+allow_ssh_cidrs = []                # Leave empty to disable direct SSH ingress (use IAP)
 
 # =============================================================================
 # Autoshutdown Configuration
