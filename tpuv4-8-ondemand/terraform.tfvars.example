@@ -1,0 +1,80 @@
+# =============================================================================
+# Example Terraform Variables File
+# =============================================================================
+# Copy this file to terraform.tfvars and update with your values
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Required Variables
+# -----------------------------------------------------------------------------
+
+# Your GCP Project ID (required)
+project_id = "your-gcp-project-id"
+
+# -----------------------------------------------------------------------------
+# TPU Configuration
+# -----------------------------------------------------------------------------
+
+# TPU / queued resource name
+tpu_name = "tpuv4-alpha"
+
+# TPU zone - v4-8 is available in us-central2-b
+tpu_zone = "us-central2-b"
+
+# Region derived from zone
+region = "us-central2"
+
+# TPU accelerator type
+tpu_accelerator_type = "v4-8"
+
+# TPU runtime/software version
+tpu_runtime_version = "tpu-ubuntu2204-base"
+
+# On-demand: both spot and preemptible must be false
+tpu_spot        = false
+tpu_preemptible = false
+
+# -----------------------------------------------------------------------------
+# Disk Configuration
+# -----------------------------------------------------------------------------
+
+disk_name = "tpuv4-alpha-disk"
+
+# Disk zone must match TPU zone for attachment
+disk_zone = "us-central2-b"
+
+disk_type    = "pd-balanced"
+disk_size_gb = 50
+
+# -----------------------------------------------------------------------------
+# Disk Attachment
+# -----------------------------------------------------------------------------
+
+attach_disk_to_tpu   = true
+disk_attachment_mode = "READ_WRITE"
+
+# -----------------------------------------------------------------------------
+# Network Configuration
+# -----------------------------------------------------------------------------
+
+# Public IP enabled
+enable_external_ips = true
+
+network    = "default"
+subnetwork = "default"
+
+# -----------------------------------------------------------------------------
+# Labels
+# -----------------------------------------------------------------------------
+
+tpu_labels = {
+  environment = "development"
+  managed_by  = "terraform"
+  purpose     = "ml-training"
+}
+
+disk_labels = {
+  environment = "development"
+  managed_by  = "terraform"
+  purpose     = "tpu-storage"
+}
